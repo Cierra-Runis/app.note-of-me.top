@@ -31,6 +31,7 @@ const geistMono = Geist_Mono({
 
 export const metadata: Metadata = {
   title: 'アプリ of 我',
+  icons: 'https://avatars.githubusercontent.com/u/29329988',
 };
 
 export default function RootLayout({
