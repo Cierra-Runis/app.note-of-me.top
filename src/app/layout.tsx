@@ -1,22 +1,13 @@
+import { AppSidebar } from '@/components/sidebar';
 import { ThemeProvider } from '@/components/theme-provider';
 import { Separator } from '@/components/ui/separator';
 import {
-  Sidebar,
-  SidebarContent,
-  SidebarFooter,
-  SidebarGroup,
-  SidebarHeader,
   SidebarInset,
-  SidebarMenu,
-  SidebarMenuButton,
-  SidebarMenuItem,
   SidebarProvider,
   SidebarTrigger,
 } from '@/components/ui/sidebar';
 import type { Metadata } from 'next';
 import { Geist, Geist_Mono } from 'next/font/google';
-import Image from 'next/image';
-import Link from 'next/link';
 import './globals.css';
 
 const geistSans = Geist({
@@ -68,42 +59,5 @@ export default function RootLayout({
         </ThemeProvider>
       </body>
     </html>
-  );
-}
-export function AppSidebar() {
-  return (
-    <Sidebar>
-      <SidebarHeader>
-        <SidebarMenu>
-          <SidebarMenuItem>
-            <SidebarMenuButton size='lg' asChild>
-              <Link href='/'>
-                <Image
-                  src='https://avatars.githubusercontent.com/u/29329988'
-                  alt='Cierra Runis'
-                  className='rounded-full'
-                  width={36}
-                  height={36}
-                  priority
-                />
-                <div className='flex flex-col leading-none'>
-                  <span className='font-medium'>
-                    {metadata.title?.toString()}
-                  </span>
-                  <span className='text-xs text-muted-foreground'>
-                    app.note-of-me.top
-                  </span>
-                </div>
-              </Link>
-            </SidebarMenuButton>
-          </SidebarMenuItem>
-        </SidebarMenu>
-      </SidebarHeader>
-      <SidebarContent>
-        <SidebarGroup />
-        <SidebarGroup />
-      </SidebarContent>
-      <SidebarFooter />
-    </Sidebar>
   );
 }
