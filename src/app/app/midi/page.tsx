@@ -122,9 +122,12 @@ export default function MidiPlayer() {
 
           Tone.getDraw().schedule(() => {
             activateKey(i, note.name);
-            setTimeout(() => {
-              deactivateKey(i, note.name);
-            }, note.duration * 1000);
+            setTimeout(
+              () => {
+                deactivateKey(i, note.name);
+              },
+              Math.max(note.duration * 1000 * 0.8, note.duration * 1000 - 100),
+            );
           }, time);
         }, note.time);
       });
