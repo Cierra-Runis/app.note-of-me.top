@@ -55,7 +55,9 @@ export default function MidiPlayer() {
     Tone.getTransport().stop();
     Tone.getTransport().cancel();
     synthRefs.current = midiData.tracks.map(() => {
-      return new Tone.PolySynth(Tone.Synth).toDestination();
+      return new Tone.PolySynth({
+        maxPolyphony: 128,
+      }).toDestination();
     });
     muteRefs.current = midiData.tracks.map(() => false);
     soloRefs.current = midiData.tracks.map(() => false);
@@ -78,12 +80,10 @@ export default function MidiPlayer() {
     const key = `${trackIndex}-${noteName}`;
     const element = keyElementsRef.current.get(key);
     if (element) {
-      element.style.backgroundColor = `hsl(${
-        (trackIndex * 30) % 360
-      }, 100%, 70%)`;
-      element.style.boxShadow = `0 0 8px hsl(${
-        (trackIndex * 30) % 360
-      }, 100%, 70%)`;
+      element.style.backgroundColor = `hsl(${(trackIndex * 30) % 360
+        }, 100%, 70%)`;
+      element.style.boxShadow = `0 0 8px hsl(${(trackIndex * 30) % 360
+        }, 100%, 70%)`;
     }
   };
 
