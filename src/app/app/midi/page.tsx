@@ -2,11 +2,11 @@
 
 import { Midi } from '@tonejs/midi';
 import {
-  MegaphoneIcon,
-  MegaphoneOffIcon,
-  MicVocalIcon,
-  PlayIcon,
-  UploadIcon,
+    MegaphoneIcon,
+    MegaphoneOffIcon,
+    MicVocalIcon,
+    PlayIcon,
+    UploadIcon,
 } from 'lucide-react';
 import { useEffect, useRef, useState } from 'react';
 import { toast } from 'sonner';
@@ -17,15 +17,30 @@ import { Button } from '@/components/ui/button';
 import { ButtonGroup } from '@/components/ui/button-group';
 import { Spinner } from '@/components/ui/spinner';
 
-// 88 个钢琴键 MIDI 音符编号 (A0 到 C8)
 const PIANO_KEYS = Array.from({ length: 88 }, (_, i) => i + 21);
+
+const trackColor = (trackIndex: number) =>
+  `hsl(${(trackIndex * 30) % 360}, 100%, 70%)`;
+
+const midiToHz = (midiNumber: number) => 440 * 2 ** ((midiNumber - 69) / 12);
+
+// ~60 FPS
+const FRAME_INTERVAL_MS = 15;
+
+interface KeyEvent {
+  end: number;
+  midiNumber: number;
+  start: number;
+  trackIndex: number;
+}
 
 export default function MidiPlayer() {
   const [midi, setMidi] = useState<Midi>();
-  const synthRefs = useRef<Tone.PolySynth[]>([]);
+  const synthRef = useRef<null | Tone.PolySynth>(null);
   const muteRefs = useRef<boolean[]>([]);
   const soloRefs = useRef<boolean[]>([]);
   const keyElementsRef = useRef<Map<string, HTMLDivElement>>(new Map());
+  const rafRef = useRef(0);
   const [muteStates, setMuteStates] = useState<boolean[]>([]);
   const [soloStates, setSoloStates] = useState<boolean[]>([]);
 
@@ -38,27 +53,33 @@ export default function MidiPlayer() {
         setMidi(midiData);
         reset(midiData);
       } catch {
-        toast(
-          '不合法的 MIDI 文件，请选择正确的文件',
-          // {
-          // color: 'danger',
-          // description: '不合法的 MIDI 文件，请选择正确的文件',
-          // title: '错误',
-          // }
-        );
+        toast('Invalid MIDI file, please reselect.');
       }
     },
     readAs: 'ArrayBuffer',
   });
 
-  const reset = (midiData: Midi) => {
+  const shouldPlay = (trackIndex: number) => {
+    const hasSolo = soloRefs.current.some(Boolean);
+    if (hasSolo && !soloRefs.current[trackIndex]) return false;
+    return !muteRefs.current[trackIndex];
+  };
+
+  const stopPlayback = () => {
     Tone.getTransport().stop();
     Tone.getTransport().cancel();
-    synthRefs.current = midiData.tracks.map(() => {
-      return new Tone.PolySynth({
-        maxPolyphony: 128,
-      }).toDestination();
+    cancelAnimationFrame(rafRef.current);
+    keyElementsRef.current.forEach((element) => {
+      element.style.backgroundColor = '';
     });
+  };
+
+  const reset = (midiData: Midi) => {
+    stopPlayback();
+    synthRef.current?.dispose();
+    synthRef.current = new Tone.PolySynth({
+      maxPolyphony: 128,
+    }).toDestination();
     muteRefs.current = midiData.tracks.map(() => false);
     soloRefs.current = midiData.tracks.map(() => false);
     setMuteStates(midiData.tracks.map(() => false));
@@ -76,81 +97,86 @@ export default function MidiPlayer() {
     setSoloStates([...soloRefs.current]);
   };
 
-  const activateKey = (trackIndex: number, noteName: string) => {
-    const key = `${trackIndex}-${noteName}`;
-    const element = keyElementsRef.current.get(key);
-    if (element) {
-      element.style.backgroundColor = `hsl(${(trackIndex * 30) % 360
-        }, 100%, 70%)`;
-      element.style.boxShadow = `0 0 8px hsl(${(trackIndex * 30) % 360
-        }, 100%, 70%)`;
-    }
-  };
-
-  const deactivateKey = (trackIndex: number, noteName: string) => {
-    const key = `${trackIndex}-${noteName}`;
-    const element = keyElementsRef.current.get(key);
-    if (element) {
-      element.style.backgroundColor = '';
-      element.style.boxShadow = '';
-    }
-  };
-
   const startPlayback = async () => {
+    const synth = synthRef.current;
+    if (!midi || !synth) return;
+
     await Tone.start();
+    stopPlayback();
 
-    Tone.getTransport().stop();
-    Tone.getTransport().cancel();
+    const transport = Tone.getTransport();
+    const events: KeyEvent[] = [];
 
-    midi?.tracks.forEach((track, i) => {
-      const synth = synthRefs.current[i];
+    midi.tracks.forEach((track, trackIndex) => {
       track.notes.forEach((note) => {
-        Tone.getTransport().schedule((time) => {
-          const hasSolo = soloRefs.current.some(Boolean);
-          const isSolo = soloRefs.current[i];
-          if (hasSolo && !isSolo) return;
-
-          const isMuted = muteRefs.current[i];
-          if (isMuted) return;
-
-          synth.triggerAttackRelease(
-            note.name,
-            note.duration,
-            time,
-            note.velocity,
-          );
-
-          Tone.getDraw().schedule(() => {
-            activateKey(i, note.name);
-            setTimeout(
-              () => {
-                deactivateKey(i, note.name);
-              },
-              Math.max(note.duration * 1000 * 0.8, note.duration * 1000 - 100),
-            );
-          }, time);
+        const hz = midiToHz(note.midi);
+        transport.schedule((time) => {
+          if (!shouldPlay(trackIndex)) return;
+          synth.triggerAttackRelease(hz, note.duration, time, note.velocity);
         }, note.time);
+
+        const visibleDuration = Math.max(
+          note.duration * 0.8,
+          note.duration - 0.1,
+        );
+        events.push({
+          end: note.time + visibleDuration,
+          midiNumber: note.midi,
+          start: note.time,
+          trackIndex,
+        });
       });
     });
+    events.sort((a, b) => a.start - b.start);
 
-    Tone.getTransport().start();
+    let cursor = 0;
+    let lastFrame = 0;
+    const litUntil = new Map<HTMLDivElement, number>();
+
+    const frame = (timestamp: number) => {
+      rafRef.current = requestAnimationFrame(frame);
+      if (timestamp - lastFrame < FRAME_INTERVAL_MS) return;
+      lastFrame = timestamp;
+
+      const now = transport.getSecondsAtTime(Tone.immediate());
+
+      while (cursor < events.length && events[cursor].start <= now) {
+        const event = events[cursor++];
+        if (event.end <= now || !shouldPlay(event.trackIndex)) continue;
+        const element = keyElementsRef.current.get(
+          `${event.trackIndex}-${event.midiNumber}`,
+        );
+        if (!element) continue;
+        if (!litUntil.has(element)) {
+          element.style.backgroundColor = trackColor(event.trackIndex);
+        }
+        litUntil.set(element, Math.max(litUntil.get(element) ?? 0, event.end));
+      }
+
+      litUntil.forEach((end, element) => {
+        if (end <= now) {
+          element.style.backgroundColor = '';
+          litUntil.delete(element);
+        }
+      });
+
+      if (cursor >= events.length && litUntil.size === 0) {
+        cancelAnimationFrame(rafRef.current);
+      }
+    };
+
+    transport.start();
+    rafRef.current = requestAnimationFrame(frame);
   };
 
-  // 组件卸载时清理资源
   useEffect(() => {
     const keyElements = keyElementsRef.current;
     return () => {
-      // 停止并取消所有调度
       Tone.getTransport().stop();
       Tone.getTransport().cancel();
-
-      // 释放所有合成器
-      synthRefs.current.forEach((synth) => {
-        synth.dispose();
-      });
-
-      // 清空引用
-      synthRefs.current = [];
+      cancelAnimationFrame(rafRef.current);
+      synthRef.current?.dispose();
+      synthRef.current = null;
       keyElements.clear();
     };
   }, []);
@@ -175,7 +201,6 @@ export default function MidiPlayer() {
           disabled={!midi}
           onClick={startPlayback}
           size='icon'
-          // startContent={}
           variant='ghost'
         >
           <PlayIcon />
@@ -187,12 +212,8 @@ export default function MidiPlayer() {
           midi.tracks.map((track, i) => (
             <div key={i}>
               <div className='flex items-center gap-3'>
-                <span
-                  style={{
-                    color: `hsl(${(i * 30) % 360}, 100%, 70%)`,
-                  }}
-                >
-                  {track.name || `未命名轨道`}
+                <span style={{ color: trackColor(i) }}>
+                  {track.name || `Unnamed Track`}
                 </span>
               </div>
               <div className='flex items-center gap-4'>
@@ -203,13 +224,11 @@ export default function MidiPlayer() {
                   `}
                 >
                   {PIANO_KEYS.map((midiNumber) => {
-                    const note = Tone.Frequency(midiNumber, 'midi').toNote();
-                    const keyId = `${i}-${note}`;
+                    const keyId = `${i}-${midiNumber}`;
                     return (
                       <div
                         className={`
-                          h-4 w-0.5 rounded-md bg-muted transition-all
-                          duration-0
+                          h-4 w-0.5 rounded-md bg-muted
                           sm:h-6 sm:w-1
                           md:h-8 md:w-1.25
                           lg:w-1.5
@@ -236,7 +255,6 @@ export default function MidiPlayer() {
                   <Button
                     onClick={() => toggleSolo(i)}
                     size='icon'
-                    // startContent={}
                     variant={soloStates[i] ? 'secondary' : 'ghost'}
                   >
                     <MicVocalIcon />
