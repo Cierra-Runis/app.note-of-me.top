@@ -1,6 +1,7 @@
 import { AppSidebar } from '@/components/sidebar';
 import { ThemeProvider } from '@/components/theme-provider';
 import { Separator } from '@/components/ui/separator';
+import { Toaster } from '@/components/ui/sonner';
 import {
   SidebarInset,
   SidebarProvider,
@@ -54,6 +55,7 @@ export default function RootLayout({
                 </div>
               </header>
               {children}
+              <Toaster />
             </SidebarInset>
           </SidebarProvider>
         </ThemeProvider>
