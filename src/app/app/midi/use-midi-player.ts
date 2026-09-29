@@ -6,13 +6,13 @@ import { toast } from 'sonner';
 import * as Tone from 'tone';
 
 import {
-  deleteTrack,
-  hashFile,
-  loadSettings,
-  loadTracks,
-  saveSettings,
-  saveTracks,
-  type StoredTrack,
+    deleteTrack,
+    hashFile,
+    loadSettings,
+    loadTracks,
+    saveSettings,
+    saveTracks,
+    type StoredTrack,
 } from './library';
 import { createSessionAnchor } from './session-anchor';
 
@@ -365,7 +365,7 @@ export function useMidiPlayer() {
     const transport = Tone.getTransport();
     transport.cancel();
     synthRef.current?.dispose();
-    const synth = new Tone.PolySynth({ maxPolyphony: 128 }).toDestination();
+    const synth = new Tone.PolySynth({ maxPolyphony: 128, volume: -18 }).toDestination();
     synthRef.current = synth;
 
     const midi = new Midi(item.data);
